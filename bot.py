@@ -393,11 +393,42 @@ class RankedBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(RankedBoostModal())
+       await interaction.response.send_message(view=RankSelectView("Boost"), ephemeral=True)
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(RankedBoostModal())
+       await interaction.response.send_message(view=RankSelectView("Carry"), ephemeral=True)
+        class RankSelectView(discord.ui.View):
+    def __init__(self, order_type):
+        super().__init__(timeout=60)
+        self.order_type = order_type
+
+    @discord.ui.select(placeholder="Select Current Rank...", options=[
+        discord.SelectOption(label="Bronze I"), discord.SelectOption(label="Bronze II"), discord.SelectOption(label="Bronze III"),
+        discord.SelectOption(label="Silver I"), discord.SelectOption(label="Silver II"), discord.SelectOption(label="Silver III"),
+        discord.SelectOption(label="Gold I"), discord.SelectOption(label="Gold II"), discord.SelectOption(label="Gold III"),
+        discord.SelectOption(label="Diamond I"), discord.SelectOption(label="Diamond II"), discord.SelectOption(label="Diamond III"),
+        discord.SelectOption(label="Mythic I"), discord.SelectOption(label="Mythic II"), discord.SelectOption(label="Mythic III"),
+        discord.SelectOption(label="Legendary I"), discord.SelectOption(label="Legendary II"), discord.SelectOption(label="Legendary III"),
+        discord.SelectOption(label="Masters I"), discord.SelectOption(label="Masters II"), discord.SelectOption(label="Masters III")
+    ])
+    async def select_current(self, interaction: discord.Interaction, select: discord.ui.Select):
+        await interaction.response.send_message("Current rank saved! Now choose your Desired Rank.", view=DesiredRankSelectView(current=select.values[0]), ephemeral=True)
+
+class DesiredRankSelectView(discord.ui.View):
+    def __init__(self, current):
+        super().__init__(timeout=60)
+        self.current = current
+
+    @discord.ui.select(placeholder="Select Desired Rank...", options=[
+        discord.SelectOption(label="Diamond I"), discord.SelectOption(label="Diamond II"), discord.SelectOption(label="Diamond III"),
+        discord.SelectOption(label="Mythic I"), discord.SelectOption(label="Mythic II"), discord.SelectOption(label="Mythic III"),
+        discord.SelectOption(label="Legendary I"), discord.SelectOption(label="Legendary II"), discord.SelectOption(label="Legendary III"),
+        discord.SelectOption(label="Masters I"), discord.SelectOption(label="Masters II"), discord.SelectOption(label="Masters III"),
+        discord.SelectOption(label="Pro")
+    ])
+    async def select_desired(self, interaction: discord.Interaction, select: discord.ui.Select):
+        await interaction.response.send_modal(RankedBoostModal(current=self.current, desired=select.values[0]))
 # ─────────────────────────────────────────────
 # TROPHIES FLOW
 # ─────────────────────────────────────────────
