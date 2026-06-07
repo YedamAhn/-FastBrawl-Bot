@@ -111,7 +111,8 @@ def stars(rating):
     return "⭐" * rating + "☆" * (5 - rating)
 
 def make_options(lst):
-    return [discord.SelectOption(label=x, value=x) for x in lst[:25]] # Modals strictly limit SelectOptions to 25 items
+    # Limits list to 25 items as Discord Modals have a strict limit of 25 options for Dropdowns
+    return [discord.SelectOption(label=x, value=x) for x in lst[:25]]
 
 def build_confirm_embed(service_name, data):
     embed = discord.Embed(
@@ -189,7 +190,8 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket With Reason"):
 class ConfirmOrderView(discord.ui.View):
     def __init__(self, service, data):
         super().__init__(timeout=None)
-        self.service, self.data = service, data
+        self.service = service
+        self.data = data
 
     @discord.ui.button(label="✅ Confirm & Create Ticket", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -210,7 +212,7 @@ class ConfirmOrderView(discord.ui.View):
         await interaction.response.edit_message(content="❌ Order cancelled.", embed=None, view=None)
 
 # ─────────────────────────────────────────────
-# NEW: DROP-DOWN POP-UP MODALS
+# DROP-DOWN POP-UP MODALS
 # ─────────────────────────────────────────────
 class RankedBoostModal(discord.ui.Modal):
     def __init__(self, order_type):
@@ -310,7 +312,7 @@ class PrestigeBoostModal(discord.ui.Modal):
 
 class WinstreakBoostModal(discord.ui.Modal):
     def __init__(self, order_type):
-        super().__init__(title=f"Winstreak Boost Order - {order_type}")
+        super().__init__(title=f"Winstreak Order - {order_type}")
         self.order_type = order_type
         
         self.target_winstreak = discord.ui.Select(placeholder="Select target winstreak...", options=make_options(WINSTREAK_OPTIONS))
@@ -387,7 +389,7 @@ class TierModal(discord.ui.Modal):
         await interaction.response.send_message(embed=embed, view=ConfirmOrderView(f"tier-{self.tier}", data), ephemeral=True)
 
 # ─────────────────────────────────────────────
-# PERSISTENT EMBED VIEWS (BUTTONS IN CHAT)
+# PERSISTENT BUTTON VIEWS
 # ─────────────────────────────────────────────
 class RankedOrderView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
@@ -479,7 +481,8 @@ class MatchBoostCarryView(discord.ui.View):
 class TierOrderView(discord.ui.View):
     def __init__(self, tier, service):
         super().__init__(timeout=None)
-        self.tier, self.service = tier, service
+        self.tier = tier
+        self.service = service
         btn = discord.ui.Button(label="Order Now", style=discord.ButtonStyle.success, emoji="⚡", custom_id=f"tier_{tier}_order_now")
         btn.callback = self.order_now
         self.add_item(btn)
@@ -488,7 +491,7 @@ class TierOrderView(discord.ui.View):
         await interaction.response.send_modal(TierModal(self.tier))
 
 # ─────────────────────────────────────────────
-# ORDER-HERE DROPDOWN
+# MAIN MENU DROPDOWN & SUPPORT
 # ─────────────────────────────────────────────
 class ServiceSelectView(discord.ui.View):
     def __init__(self):
@@ -596,7 +599,7 @@ class ReviewPostView(discord.ui.View):
         await interaction.response.edit_message(content="✅ Review posted! Thank you!", view=None)
 
 # ─────────────────────────────────────────────
-# SLASH COMMANDS
+# SLASH COMMANDS FOR SETUP
 # ─────────────────────────────────────────────
 async def safe_send_panel(interaction, embed, view, success_msg):
     await interaction.response.defer(ephemeral=True)
@@ -622,6 +625,7 @@ async def setup_order_here(interaction: discord.Interaction):
 async def setup_ranked(interaction: discord.Interaction):
     embed = discord.Embed(title="🏆 Ranked B00st Service", description="**What We Offer**\n• Climb the ranks securely", color=discord.Color.blue())
     embed.set_image(url=IMAGES["ranked"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, RankedOrderView(), "✅ Ranked panel posted!")
 
 @bot.tree.command(name="setup-trophies", description="Post the trophies order panel")
@@ -629,6 +633,7 @@ async def setup_ranked(interaction: discord.Interaction):
 async def setup_trophies(interaction: discord.Interaction):
     embed = discord.Embed(title="🏆 Trophy B00st Service", description="**What We Offer**\n• Safe and efficient trophy farming", color=discord.Color.gold())
     embed.set_image(url=IMAGES["bulk-trophies"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, TrophiesOrderView(), "✅ Trophies panel posted!")
 
 @bot.tree.command(name="setup-prestige", description="Post the prestige order panel")
@@ -636,6 +641,7 @@ async def setup_trophies(interaction: discord.Interaction):
 async def setup_prestige(interaction: discord.Interaction):
     embed = discord.Embed(title="⭐ Prestige B00st Service", description="**What We Offer**\n• Quick prestige progression", color=discord.Color.purple())
     embed.set_image(url=IMAGES["prestige"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, PrestigeOrderView(), "✅ Prestige panel posted!")
 
 @bot.tree.command(name="setup-winstreak", description="Post the winstreak order panel")
@@ -643,6 +649,7 @@ async def setup_prestige(interaction: discord.Interaction):
 async def setup_winstreak(interaction: discord.Interaction):
     embed = discord.Embed(title="🔥 Winstreak B00st Service", description="**What We Offer**\n• Dominate matches with pro players", color=discord.Color.orange())
     embed.set_image(url=IMAGES["winstreaks"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, WinstreakOrderView(), "✅ Winstreak panel posted!")
 
 @bot.tree.command(name="setup-matcherino", description="Post the matcherino order panel")
@@ -650,6 +657,7 @@ async def setup_winstreak(interaction: discord.Interaction):
 async def setup_matcherino(interaction: discord.Interaction):
     embed = discord.Embed(title="🎯 Matcherino B00st Service", description="**What We Offer**\n• Professional tournament services", color=discord.Color.green())
     embed.set_image(url=IMAGES["matcherino"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, MatcherinoOrderView(), "✅ Matcherino panel posted!")
 
 @bot.tree.command(name="setup-championship", description="Post the championship order panel")
@@ -657,6 +665,7 @@ async def setup_matcherino(interaction: discord.Interaction):
 async def setup_championship(interaction: discord.Interaction):
     embed = discord.Embed(title="🏆 Championship B00st Service", description="**What We Offer**\n• Fast challenge wins", color=discord.Color.yellow())
     embed.set_image(url=IMAGES["championship"])
+    embed.set_footer(text=f"Powered by {BRAND}")
     await safe_send_panel(interaction, embed, ChampionshipOrderView(), "✅ Championship panel posted!")
 
 @bot.tree.command(name="setup-tier1", description="Post the Tier 1 order panel")
@@ -680,6 +689,7 @@ async def review(interaction: discord.Interaction, user: discord.Member):
     await interaction.response.defer(ephemeral=True)
     try:
         embed = discord.Embed(title="⭐ Leave a Review", description="How was your experience?\nSelect a rating below!", color=discord.Color.gold())
+        embed.set_footer(text=f"Powered by {BRAND}")
         await user.send(embed=embed, view=ReviewRatingView())
         await interaction.followup.send(f"✅ Review request sent to {user.mention}!")
     except:
