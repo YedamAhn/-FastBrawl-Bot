@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
+from discord impor@discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):t app_commands
 import os
 from dotenv import load_dotenv
 import random
@@ -527,8 +528,8 @@ class TrophiesBoostCarryView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="trophies_boost")
-    async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
+@discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
         data = {"Order Type": "Boost"}
         view = TrophiesCurrentView("bulk-trophies", "Trophy Boost", data)
         await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
