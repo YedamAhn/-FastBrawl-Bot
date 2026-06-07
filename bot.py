@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord impor@discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+from discord import app_commands
 async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):t app_commands
 import os
 from dotenv import load_dotenv
