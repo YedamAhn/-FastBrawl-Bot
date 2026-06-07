@@ -467,8 +467,9 @@ class RankedOrderView(discord.ui.View):
 class RankedBoostCarryView(discord.ui.View): # 0 spaces
     def __init__(self):                      # 4 spaces
     
-    async def boost(self, ...):              # 4 spaces
-        await interaction.response.send_modal(RankedBoostModal()) # 8 spaces
+   @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+    async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(RankedBoostModal())
 
     @discord.ui.button(...)                  # 4 spaces
     async def carry(self, ...):              # 4 spaces
