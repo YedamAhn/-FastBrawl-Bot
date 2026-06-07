@@ -416,14 +416,17 @@ class RankedOrderView(discord.ui.View):
         embed = discord.Embed(title="Choose your service type:", description="🚀 **B00st** - Standard service\n🤝 **Carry** - Play together (2x price)", color=discord.Color.purple())
         await interaction.response.send_message(embed=embed, view=RankedBoostCarryView(), ephemeral=True)
 
-class RankedBoostCarryView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+class RankedBoostCarryView(discord.ui.View): # 0 spaces
+    def __init__(self):                      # 4 spaces
+        super().__init__(timeout=None)       # 8 spaces
 
-   @discord.ui.button(label="Get B00sted", ...)
-    async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # This will now open the full form, not the dropdown
-        await interaction.response.send_modal(RankedBoostModal())
+    @discord.ui.button(...)                  # 4 spaces (Aligned with def)
+    async def boost(self, ...):              # 4 spaces
+        await interaction.response.send_modal(RankedBoostModal()) # 8 spaces
+
+    @discord.ui.button(...)                  # 4 spaces
+    async def carry(self, ...):              # 4 spaces
+        await interaction.response.send_modal(RankedBoostModal()) # 8 spaces
 
   @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
