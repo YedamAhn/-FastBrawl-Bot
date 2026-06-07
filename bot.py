@@ -128,7 +128,6 @@ async def create_ticket(guild, service, user, data):
 
     ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
 
-    # Embed 1 — header
     header_embed = discord.Embed(
         title=f"{ticket_label} is now open! 🎮",
         description="**Click the button below to close this ticket when you're done.**",
@@ -136,7 +135,6 @@ async def create_ticket(guild, service, user, data):
     )
     header_embed.set_footer(text=f"Powered by {BRAND}")
 
-    # Embed 2 — order details
     details_embed = discord.Embed(
         title=f"ℹ️ Order Details",
         description=f"**{order_title}**",
@@ -157,7 +155,6 @@ async def create_ticket(guild, service, user, data):
     await thread.send(embeds=[header_embed, details_embed], view=CloseTicketView())
     await thread.add_user(user)
 
-    # Ping owner
     owner_role = discord.utils.get(guild.roles, name="Owner")
     if owner_role:
         await thread.send(f"{owner_role.mention} New ticket opened!", delete_after=5)
@@ -190,7 +187,7 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket With Reason"):
             await interaction.channel.edit(archived=True, locked=True)
 
 # ─────────────────────────────────────────────
-# CONFIRM VIEW (Fixed)
+# CONFIRM VIEW
 # ─────────────────────────────────────────────
 class ConfirmOrderView(discord.ui.View):
     def __init__(self, service, data):
@@ -246,7 +243,7 @@ class AdditionalNotesModal(discord.ui.Modal, title="Additional Notes (Optional)"
         await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, self.data), ephemeral=True)
 
 # ─────────────────────────────────────────────
-# OTHER PAYMENT & NOTES MODAL (Fixed)
+# OTHER PAYMENT & NOTES MODAL
 # ─────────────────────────────────────────────
 class OtherPaymentAndNotesModal(discord.ui.Modal, title="Payment & Notes"):
     payment = discord.ui.TextInput(label="Payment Method", placeholder="Enter your payment method...", max_length=50)
@@ -265,7 +262,7 @@ class OtherPaymentAndNotesModal(discord.ui.Modal, title="Payment & Notes"):
         await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, self.data), ephemeral=True)
 
 # ─────────────────────────────────────────────
-# PAYMENT VIEW (reusable)
+# PAYMENT VIEW
 # ─────────────────────────────────────────────
 class PaymentView(discord.ui.View):
     def __init__(self, service, service_name, data, custom_id_suffix):
@@ -752,4 +749,205 @@ class ServiceSelectView(discord.ui.View):
             else:
                 await interaction.response.send_message("Support channel not found. Contact an admin.", ephemeral=True)
 
-# ────────────────────────────────────────
+# ─────────────────────────────────────────────
+# REVIEW SYSTEM
+# ─────────────────────────────────────────────
+class ReviewRatingView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        for i in range(1, 6):
+            btn = discord.ui.Button(label=f"{'⭐' * i}", style=discord.ButtonStyle.secondary, custom_id=f"review_star_{i}")
+            btn.callback = self.make_callback(i)
+            self.add_item(btn)
+
+    def make_callback(self, rating):
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.send_modal(ReviewCommentModal(rating))
+        return callback
+
+class ReviewCommentModal(discord.ui.Modal):
+    def __init__(self, rating):
+        super().__init__(title=f"Review — {rating}/5 Stars")
+        self.rating = rating
+        self.comment = discord.ui.TextInput(label="Comment", placeholder="Tell us about your experience...", max_length=500, required=False)
+        self.add_item(self.comment)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view = ReviewPostView(self.rating, self.comment.value or "No comment")
+        await interaction.response.send_message("How would you like to post your review?", view=view, ephemeral=True)
+
+class ReviewPostView(discord.ui.View):
+    def __init__(self, rating, comment):
+        super().__init__(timeout=None)
+        self.rating = rating
+        self.comment = comment
+
+    @discord.ui.button(label="Post with Username", style=discord.ButtonStyle.primary, custom_id="review_post_username")
+    async def post_with_name(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.post_review(interaction, anonymous=False)
+
+    @discord.ui.button(label="Post Anonymously", style=discord.ButtonStyle.secondary, custom_id="review_post_anon")
+    async def post_anon(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.post_review(interaction, anonymous=True)
+
+    async def post_review(self, interaction: discord.Interaction, anonymous: bool):
+        guild = interaction.guild or (bot.guilds[0] if bot.guilds else None)
+        if not guild:
+            await interaction.response.send_message("Could not find server.", ephemeral=True)
+            return
+
+        reviews_channel = discord.utils.get(guild.channels, name="✏️｜clients-opinion")
+        if not reviews_channel:
+            await interaction.response.send_message("Reviews channel not found.", ephemeral=True)
+            return
+
+        display_name = "Anonymous" if anonymous else interaction.user.name
+        embed = discord.Embed(title=f"⭐ New Review from {display_name}", color=discord.Color.gold())
+        embed.add_field(name=f"⭐ Rating ({self.rating}/5)", value=f"> {stars(self.rating)}", inline=False)
+        embed.add_field(name="ℹ️ Comment", value=f"> {self.comment}", inline=False)
+        if not anonymous:
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.set_footer(text=f"Powered by {BRAND} | {discord.utils.utcnow().strftime('%A, %d %B %Y at %H:%M')}")
+
+        await reviews_channel.send(embed=embed)
+        await interaction.response.edit_message(content="✅ Review posted! Thank you!", view=None)
+
+# ─────────────────────────────────────────────
+# SLASH COMMANDS
+# ─────────────────────────────────────────────
+
+# Helper function to prevent timeouts and catch permission errors
+async def safe_send_panel(interaction, embed, view, success_msg):
+    # 1. Immediately tell Discord we are working on it to prevent the timeout
+    await interaction.response.defer(ephemeral=True)
+    try:
+        # 2. Try to send the panel
+        if embed:
+            await interaction.channel.send(embed=embed, view=view)
+        else:
+            await interaction.channel.send(view=view)
+        # 3. Confirm success
+        await interaction.followup.send(success_msg)
+    except discord.errors.Forbidden:
+        # 4. Catch the silent permission crash and tell the user
+        await interaction.followup.send("❌ **Error:** I don't have permission to send messages or embed links in this channel! Check my roles.")
+    except Exception as e:
+        await interaction.followup.send(f"❌ **Error:** {e}")
+
+@bot.tree.command(name="setup-order-here", description="Post the main order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_order_here(interaction: discord.Interaction):
+    embed = discord.Embed(title="Select An Option Below ✏️", color=discord.Color.purple())
+    embed.add_field(name="📋 Rules", value="• Follow the directions of FastBrawl™ Bot if given\n• Do not spam ping staff\n• Be patient, support has many tickets to handle", inline=False)
+    embed.add_field(name="", value="**Select what type of ticket you want to be opened from the dropdown below ↓**", inline=False)
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, ServiceSelectView(), "✅ Order panel posted!")
+
+@bot.tree.command(name="setup-ranked", description="Post the ranked order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_ranked(interaction: discord.Interaction):
+    embed = discord.Embed(title="🏆 Ranked B00st Service", description="**What We Offer**\n• Climb the ranks with professional boosting service\n• Fast, secure, and reliable rank progression\n• Experienced boosters with proven track records", color=discord.Color.blue())
+    embed.set_image(url=IMAGES["ranked"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, RankedOrderView(), "✅ Ranked panel posted!")
+
+@bot.tree.command(name="setup-trophies", description="Post the trophies order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_trophies(interaction: discord.Interaction):
+    embed = discord.Embed(title="🏆 Trophy B00st Service", description="**What We Offer**\n• Boost your trophy count to reach new milestones\n• Safe and efficient trophy farming service\n• Achieve your trophy goals with expert help", color=discord.Color.gold())
+    embed.set_image(url=IMAGES["bulk-trophies"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, TrophiesOrderView(), "✅ Trophies panel posted!")
+
+@bot.tree.command(name="setup-prestige", description="Post the prestige order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_prestige(interaction: discord.Interaction):
+    embed = discord.Embed(title="⭐ Prestige B00st Service", description="**What We Offer**\n• Unlock prestige levels for your brawlers\n• Quick and efficient prestige progression\n• Show off your dedication with prestige ranks", color=discord.Color.purple())
+    embed.set_image(url=IMAGES["prestige"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, PrestigeOrderView(), "✅ Prestige panel posted!")
+
+@bot.tree.command(name="setup-winstreak", description="Post the winstreak order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_winstreak(interaction: discord.Interaction):
+    embed = discord.Embed(title="🔥 Winstreak B00st Service", description="**What We Offer**\n• Achieve impressive winstreaks with pro players\n• Dominate matches and build your streak\n• Consistent wins with skilled teammates", color=discord.Color.orange())
+    embed.set_image(url=IMAGES["winstreaks"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, WinstreakOrderView(), "✅ Winstreak panel posted!")
+
+@bot.tree.command(name="setup-matcherino", description="Post the matcherino order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_matcherino(interaction: discord.Interaction):
+    embed = discord.Embed(title="🎯 Matcherino B00st Service", description="**What We Offer**\n• Professional matcherino tournament services\n• Competitive edge with experienced players\n• Tournament ready team support", color=discord.Color.green())
+    embed.set_image(url=IMAGES["matcherino"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, MatcherinoOrderView(), "✅ Matcherino panel posted!")
+
+@bot.tree.command(name="setup-championship", description="Post the championship order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_championship(interaction: discord.Interaction):
+    embed = discord.Embed(title="🏆 Championship B00st Service", description="**What We Offer**\n• Professional and fast challenge wins\n• Chance for you to compete in the Monthly Qualifiers\n• Competitive and sharp profile", color=discord.Color.yellow())
+    embed.set_image(url=IMAGES["championship"])
+    embed.set_footer(text=f"Powered by {BRAND}")
+    await safe_send_panel(interaction, embed, ChampionshipOrderView(), "✅ Championship panel posted!")
+
+@bot.tree.command(name="setup-tier1", description="Post the Tier 1 order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_tier1(interaction: discord.Interaction):
+    await safe_send_panel(interaction, None, TierOrderView("1", "tier-1"), "✅ Tier 1 panel posted!")
+
+@bot.tree.command(name="setup-tier2", description="Post the Tier 2 order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_tier2(interaction: discord.Interaction):
+    await safe_send_panel(interaction, None, TierOrderView("2", "tier-2"), "✅ Tier 2 panel posted!")
+
+@bot.tree.command(name="setup-tier3", description="Post the Tier 3 order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_tier3(interaction: discord.Interaction):
+    await safe_send_panel(interaction, None, TierOrderView("3", "tier-3"), "✅ Tier 3 panel posted!")
+
+@bot.tree.command(name="review", description="Send a review request to a user")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(user="The user to send a review request to")
+async def review(interaction: discord.Interaction, user: discord.Member):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        embed = discord.Embed(title="⭐ Leave a Review", description="How was your experience with Fast Brawl Services?\nSelect a star rating below!", color=discord.Color.gold())
+        embed.set_footer(text=f"Powered by {BRAND}")
+        await user.send(embed=embed, view=ReviewRatingView())
+        await interaction.followup.send(f"✅ Review request sent to {user.mention}!")
+    except:
+        await interaction.followup.send(f"❌ Could not DM {user.mention}. They may have DMs disabled.")
+
+# ─────────────────────────────────────────────
+# BOT EVENTS
+# ─────────────────────────────────────────────
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} is online!")
+    bot.add_view(ServiceSelectView())
+    bot.add_view(RankedOrderView())
+    bot.add_view(RankedBoostCarryView())
+    bot.add_view(TrophiesOrderView())
+    bot.add_view(TrophiesBoostCarryView())
+    bot.add_view(PrestigeOrderView())
+    bot.add_view(PrestigeBoostCarryView())
+    bot.add_view(WinstreakOrderView())
+    bot.add_view(WinstreakBoostCarryView())
+    bot.add_view(MatcherinoOrderView())
+    bot.add_view(MatcherinoBoostCarryView())
+    bot.add_view(ChampionshipOrderView())
+    bot.add_view(ChampionshipBoostCarryView())
+    bot.add_view(CloseTicketView())
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} slash commands")
+    except Exception as e:
+        print(f"❌ Failed to sync: {e}")
+
+if not TOKEN:
+    print("❌ TOKEN not found.")
+    exit()
+
+bot.run(TOKEN)
