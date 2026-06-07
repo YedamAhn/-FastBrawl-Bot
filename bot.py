@@ -28,6 +28,29 @@ PAYMENT_DETAILS = {
     "Crypto": "👤 A staff member will provide crypto details shortly.",
     "PaySafe Card": "👤 A staff member will provide PaySafe details shortly.",
 }
+# --- ADD THIS CLASS RIGHT BELOW YOUR IMPORTS ---
+class RankedBoostModal(discord.ui.Modal, title="Ranked Boost Order"):
+    current_rank = discord.ui.TextInput(label="Select your current rank", placeholder="e.g. Bronze I", min_length=2, max_length=50)
+    desired_rank = discord.ui.TextInput(label="Select your desired rank", placeholder="e.g. Mythic I", min_length=2, max_length=50)
+    power_11 = discord.ui.TextInput(label="How many Power 11 brawlers?", placeholder="e.g. 10", min_length=1, max_length=10)
+    payment = discord.ui.TextInput(label="Payment Method", placeholder="e.g. PayPal", min_length=2, max_length=50)
+    notes = discord.ui.TextInput(label="Additional Notes", style=discord.TextStyle.paragraph, required=False, max_length=500)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Current Rank": self.current_rank.value,
+            "Desired Rank": self.desired_rank.value,
+            "Power 11 Brawlers": self.power_11.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value or "None"
+        }
+        await interaction.response.defer(ephemeral=True)
+        # This calls the create_ticket function you already have
+        thread = await create_ticket(interaction.guild, "ranked", interaction.user, data)
+        if thread:
+            await interaction.followup.send(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Error creating ticket.", ephemeral=True)
 
 SERVICE_ACTIVE_CHANNELS = {
     "ranked": "🟢｜active-ranked",
@@ -370,16 +393,11 @@ class RankedBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = RankedCurrentRankView("ranked", "Ranked Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(RankedBoostModal())
 
-    @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="ranked_carry")
+    @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = RankedCurrentRankView("ranked", "Ranked Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
-
+        await interaction.response.send_modal(RankedBoostModal())
 # ─────────────────────────────────────────────
 # TROPHIES FLOW
 # ─────────────────────────────────────────────
