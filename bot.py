@@ -29,32 +29,41 @@ PAYMENT_DETAILS = {
     "PaySafe Card": "👤 A staff member will provide PaySafe details shortly.",
 }
 # --- ADD THIS CLASS RIGHT BELOW YOUR IMPORTS ---
-class RankedBoostModal(discord.ui.Modal, title="Finalize your order"):
-    def __init__(self, current, desired):
+class RankedBoostModal(discord.ui.Modal, title="Ranked Boost Order"):
+    def __init__(self):
         super().__init__()
-        self.current_val = current
-        self.desired_val = desired
 
-    # Keep only the fields you still need the user to type in
-    power_11 = discord.ui.TextInput(label="How many Power 11 brawlers?", placeholder="e.g. 10", min_length=1, max_length=10)
-    payment = discord.ui.TextInput(label="Payment Method", placeholder="e.g. PayPal", min_length=2, max_length=50)
-    notes = discord.ui.TextInput(label="Additional Notes", style=discord.TextStyle.paragraph, required=False, max_length=500)
+    # We use TextInputs to hold the values, which mimics the professional look
+    current_rank = discord.ui.TextInput(
+        label="Current Rank (e.g. Bronze I)", 
+        placeholder="Type your rank here...", 
+        min_length=2, max_length=50
+    )
+    desired_rank = discord.ui.TextInput(
+        label="Desired Rank (e.g. Mythic I)", 
+        placeholder="Type your desired rank here...", 
+        min_length=2, max_length=50
+    )
+    power_11 = discord.ui.TextInput(
+        label="How many Power 11 brawlers?", 
+        placeholder="e.g. 10", 
+        min_length=1, max_length=10
+    )
+    payment = discord.ui.TextInput(
+        label="Payment Method", 
+        placeholder="e.g. PayPal", 
+        min_length=2, max_length=50
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Now include the values passed from the dropdowns AND the user input
         data = {
-            "Current Rank": self.current_val,
-            "Desired Rank": self.desired_val,
+            "Current Rank": self.current_rank.value,
+            "Desired Rank": self.desired_rank.value,
             "Power 11": self.power_11.value,
-            "Payment": self.payment.value,
-            "Notes": self.notes.value or "None"
+            "Payment": self.payment.value
         }
-        await interaction.response.defer(ephemeral=True)
-        thread = await create_ticket(interaction.guild, "ranked", interaction.user, data)
-        if thread:
-            await interaction.followup.send(f"✅ Ticket created: {thread.mention}", ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Error creating ticket.", ephemeral=True)
+        await create_ticket(interaction.guild, "ranked", interaction.user, data)
+        await interaction.response.send_message("✅ Order submitted!", ephemeral=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         data = {
@@ -411,13 +420,15 @@ class RankedBoostCarryView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+   @discord.ui.button(label="Get B00sted", ...)
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-       await interaction.response.send_message(view=RankSelectView("Boost"), ephemeral=True)
+        # This will now open the full form, not the dropdown
+        await interaction.response.send_modal(RankedBoostModal())
 
-    @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
+  @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-       await interaction.response.send_message(view=RankSelectView("Carry"), ephemeral=True)
+        # This will now trigger the same professional pop-up form as the Boost button
+        await interaction.response.send_modal(RankedBoostModal())
 class RankSelectView(discord.ui.View):
     def __init__(self, order_type):
         super().__init__(timeout=60)
