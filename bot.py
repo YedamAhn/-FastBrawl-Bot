@@ -396,7 +396,7 @@ class RankedPower11View(discord.ui.View):
     async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.data["Power 11 Brawlers"] = select.values[0]
         view = PaymentView(self.service, self.service_name, self.data, "ranked")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+        await interaction.response.send_message(view=RankSelectView("Boost"), ephemeral=True)
 
 class RankedOrderView(discord.ui.View):
     def __init__(self):
