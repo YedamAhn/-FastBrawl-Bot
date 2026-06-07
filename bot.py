@@ -55,7 +55,7 @@ SERVICE_TITLES = {
 
 IMAGES = {
     "ranked": "https://media.discordapp.net/attachments/1512925620169084968/1512959670476865676/image.png?ex=6a25fcfe&is=6a24ab7e&hm=cd95ede6d8e53bd66286ae88b27c7ff850a291308fcb653ed13e189472210812&=&format=webp&quality=lossless&width=2280&height=1272",
-    "prestige": "https://media.discordapp.net/attachments/1512925620169084968/1512965912385421352/image.png?ex=6a2602cf&is=6a24b14f&hm=f45e7d5a1059d5ed59791c4417d4d1441614cd7b235f547a239393291175bc0d&=&format=webp&quality=lossless&width=2448&height=1272",
+    "prestige": "https://media.discordapp.net/attachments/1512925620169084968/1513282537710161960/Screenshot_2026-06-07_at_21.44.21.png?ex=6a2729b0&is=6a25d830&hm=2294cd17c2328394617034f0a22f4d458f1cee8875de5f1b7edc27f3a2e095de&=&format=webp&quality=lossless&width=2394&height=1272",
     "bulk-trophies": "https://media.discordapp.net/attachments/1512925620169084968/1512966361150787735/image.png?ex=6a26033a&is=6a24b1ba&hm=727d9d165fa4fdd10fa5653009e2914a9bf06f99b7b5c234710cc225c72d3f05&=&format=webp&quality=lossless&width=1100&height=616",
     "matcherino": "https://media.discordapp.net/attachments/1512925620169084968/1512966584631820490/image.png?ex=6a26036f&is=6a24b1ef&hm=a80906a8a34f53d2418f21b957e7d65d75151b8d18c6b532e5cf951b5652308a&=&format=webp&quality=lossless&width=2262&height=1272",
     "winstreaks": "https://media.discordapp.net/attachments/1512925620169084968/1512967580766175293/image.png?ex=6a26045c&is=6a24b2dc&hm=ee0854a41be7bf0d7314297e4ed9481de2d886daf4a7a8eea56bde763d87f3c4&=&format=webp&quality=lossless&width=1054&height=700",
