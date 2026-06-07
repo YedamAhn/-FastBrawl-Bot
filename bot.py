@@ -121,6 +121,11 @@ async def create_ticket(guild, service, user, data):
         type=discord.ChannelType.public_thread,
         auto_archive_duration=10080
     )
+    # Delete the "started a thread" message in parent channel
+    async for message in active_channel.history(limit=5):
+        if message.type == discord.MessageType.thread_created:
+            await message.delete()
+            break
 
     ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
 
