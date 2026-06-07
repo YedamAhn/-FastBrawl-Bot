@@ -113,53 +113,22 @@ def make_options(lst):
 # ─────────────────────────────────────────────
 # CREATE TICKET
 # ─────────────────────────────────────────────
+# REPLACE YOUR EXISTING create_ticket WITH THIS EXACT BLOCK:
 async def create_ticket(guild, service, user, data):
-    active_channel_name = SERVICE_ACTIVE_CHANNELS.get(service, "active-ranked")
+    active_channel_name = SERVICE_ACTIVE_CHANNELS.get(service)
     active_channel = discord.utils.get(guild.channels, name=active_channel_name)
-    if not active_channel:
-        return None
-
+    if not active_channel: return None
+    
+    # This line is the secret: it grants the user access only when they open the ticket
+    await active_channel.set_permissions(user, view_channel=True, send_messages=False, read_message_history=True)
+    
     ticket_num = generate_ticket_number()
-    thread = await active_channel.create_thread(
-        name=f"{user.name}.{ticket_num}",
-        type=discord.ChannelType.private_thread
-    )
-
-    ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
-
-    header_embed = discord.Embed(
-        title=f"{ticket_label} is now open! 🎮",
-        description="**Click the button below to close this ticket when you're done.**",
-        color=discord.Color.green()
-    )
-    header_embed.set_footer(text=f"Powered by {BRAND}")
-
-    details_embed = discord.Embed(
-        title=f"ℹ️ Order Details",
-        description=f"**{order_title}**",
-        color=discord.Color.purple()
-    )
-
-    for key, value in data.items():
-        if key == "Notes" and value == "None":
-            continue
-        details_embed.add_field(name=key, value=f"╰ {value}", inline=False)
-
-    details_embed.add_field(name="Customer", value=f"╰ {user.mention}", inline=False)
-
-    payment_method = data.get("Payment Method", "")
-    details_embed.add_field(name="💳 Payment Details", value=get_payment_info(payment_method), inline=False)
-    details_embed.set_footer(text=f"Powered by {BRAND} • Ticket #{ticket_num}")
-
-    await thread.send(embeds=[header_embed, details_embed], view=CloseTicketView())
+    thread = await active_channel.create_thread(name=f"{user.name}.{ticket_num}", type=discord.ChannelType.private_thread)
+    
+    # ... (Keep the rest of your embed/thread logic exactly as you had it before) ...
+    
     await thread.add_user(user)
-
-    owner_role = discord.utils.get(guild.roles, name="Owner")
-    if owner_role:
-        await thread.send(f"{owner_role.mention} New ticket opened!")
-
     return thread
-
 # ─────────────────────────────────────────────
 # CLOSE TICKET
 # ─────────────────────────────────────────────
