@@ -119,28 +119,39 @@ async def create_ticket(guild, service, user, data):
     active_channel = discord.utils.get(guild.channels, name=active_channel_name)
     if not active_channel: return None
     
-    # 1. Grant temporary view access to the customer
+    # 1. Grant temp view access
     await active_channel.set_permissions(user, view_channel=True, send_messages=False, read_message_history=True)
     
     # 2. Create the thread
     ticket_num = generate_ticket_number()
     thread = await active_channel.create_thread(name=f"{user.name}.{ticket_num}", type=discord.ChannelType.private_thread)
     
-    # 3. Add the customer AND the owner (You) to the thread
+    # 3. Add both users
     await thread.add_user(user)
-    
-    # ADD THIS LINE: Replace 'YOUR_OWNER_ID' with your actual Discord User ID
-    # You can get your ID by right-clicking your name and selecting 'Copy User ID'
     owner_user = await guild.fetch_member(1070829490730705028) 
     await thread.add_user(owner_user)
     
-    # 4. Send the embed
+    # 4. Rebuild the Embed with ALL details
     ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
     details_embed = discord.Embed(title=f"ℹ️ Order Details - {ticket_num}", description=f"**{order_title}**", color=discord.Color.purple())
+    
+    # Add all data from the form
     for k, v in data.items():
         if v != "None": details_embed.add_field(name=k, value=f"╰ {v}", inline=False)
     
+    # ADD THE PAYMENT INFO BACK IN
+    payment_method = data.get("Payment Method", "Unknown")
+    details_embed.add_field(name="💳 Payment Details", value=get_payment_info(payment_method), inline=False)
+    
+    details_embed.set_footer(text=f"Powered by {BRAND}")
+    
+    # 5. Send it all
     await thread.send(embed=details_embed, view=CloseTicketView())
+    
+    # 6. Ping Owner
+    owner = discord.utils.get(guild.roles, name="Owner")
+    if owner: await thread.send(f"{owner.mention} New ticket opened!")
+    
     return thread
 # ─────────────────────────────────────────────
 # CLOSE TICKET
