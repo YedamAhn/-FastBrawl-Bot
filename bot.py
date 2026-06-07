@@ -120,7 +120,6 @@ async def create_ticket(guild, service, user, data):
         return None
 
     ticket_num = generate_ticket_number()
-    # Removed auto_archive_duration to prevent Server Boost level crashes
     thread = await active_channel.create_thread(
         name=f"{user.name}.{ticket_num}",
         type=discord.ChannelType.private_thread
@@ -187,7 +186,7 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket With Reason"):
             await interaction.channel.edit(archived=True, locked=True)
 
 # ─────────────────────────────────────────────
-# CONFIRM VIEW (FIXED WITH DEFER & ERROR CATCHING)
+# CONFIRM VIEW (FIXED EMBEDS=[] BUG)
 # ─────────────────────────────────────────────
 class ConfirmOrderView(discord.ui.View):
     def __init__(self, service, data):
@@ -197,18 +196,17 @@ class ConfirmOrderView(discord.ui.View):
 
     @discord.ui.button(label="✅ Confirm & Create Ticket", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Acknowledge immediately to prevent the 3-second timeout crash!
         await interaction.response.defer()
         try:
             thread = await create_ticket(interaction.guild, self.service, interaction.user, self.data)
             if thread:
-                await interaction.edit_original_response(content=f"✅ Ticket created: {thread.mention}\nA staff member will confirm your price shortly.", embed=None, view=None)
+                await interaction.edit_original_response(content=f"✅ Ticket created: {thread.mention}\nA staff member will confirm your price shortly.", embeds=[], view=None)
             else:
-                await interaction.edit_original_response(content="❌ Could not find active channel. Please make sure the active channel exists.", embed=None, view=None)
+                await interaction.edit_original_response(content="❌ Could not find active channel. Please make sure the active channel exists.", embeds=[], view=None)
         except discord.errors.Forbidden:
-            await interaction.edit_original_response(content="❌ **Permission Error:** I don't have the **'Create Private Threads'** or **'Send Messages in Threads'** permission! Please check my role permissions in the server settings.", embed=None, view=None)
+            await interaction.edit_original_response(content="❌ **Permission Error:** Discord blocked ticket creation because you cannot view the active orders channel! Staff must allow customers to 'View Channel' on active channels.", embeds=[], view=None)
         except Exception as e:
-            await interaction.edit_original_response(content=f"❌ **Error:** {e}", embed=None, view=None)
+            await interaction.edit_original_response(content=f"❌ **Error:** {e}", embeds=[], view=None)
 
     @discord.ui.button(label="🔄 Change Selections", style=discord.ButtonStyle.secondary)
     async def change(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -903,3 +901,56 @@ async def setup_tier1(interaction: discord.Interaction):
 
 @bot.tree.command(name="setup-tier2", description="Post the Tier 2 order panel")
 @app_commands.checks.has_permissions(administrator=True)
+async def setup_tier2(interaction: discord.Interaction):
+    await safe_send_panel(interaction, None, TierOrderView("2", "tier-2"), "✅ Tier 2 panel posted!")
+
+@bot.tree.command(name="setup-tier3", description="Post the Tier 3 order panel")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_tier3(interaction: discord.Interaction):
+    await safe_send_panel(interaction, None, TierOrderView("3", "tier-3"), "✅ Tier 3 panel posted!")
+
+@bot.tree.command(name="review", description="Send a review request to a user")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(user="The user to send a review request to")
+async def review(interaction: discord.Interaction, user: discord.Member):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        embed = discord.Embed(title="⭐ Leave a Review", description="How was your experience with Fast Brawl Services?\nSelect a star rating below!", color=discord.Color.gold())
+        embed.set_footer(text=f"Powered by {BRAND}")
+        await user.send(embed=embed, view=ReviewRatingView())
+        await interaction.followup.send(f"✅ Review request sent to {user.mention}!")
+    except:
+        await interaction.followup.send(f"❌ Could not DM {user.mention}. They may have DMs disabled.")
+
+# ─────────────────────────────────────────────
+# BOT EVENTS
+# ─────────────────────────────────────────────
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} is online!")
+    bot.add_view(ServiceSelectView())
+    bot.add_view(RankedOrderView())
+    bot.add_view(RankedBoostCarryView())
+    bot.add_view(TrophiesOrderView())
+    bot.add_view(TrophiesBoostCarryView())
+    bot.add_view(PrestigeOrderView())
+    bot.add_view(PrestigeBoostCarryView())
+    bot.add_view(WinstreakOrderView())
+    bot.add_view(WinstreakBoostCarryView())
+    bot.add_view(MatcherinoOrderView())
+    bot.add_view(MatcherinoBoostCarryView())
+    bot.add_view(ChampionshipOrderView())
+    bot.add_view(ChampionshipBoostCarryView())
+    bot.add_view(CloseTicketView())
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} slash commands")
+    except Exception as e:
+        print(f"❌ Failed to sync: {e}")
+
+if not TOKEN:
+    print("❌ TOKEN not found.")
+    exit()
+
+bot.run(TOKEN)
