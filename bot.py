@@ -1,26 +1,60 @@
 import discord
 from discord.ext import commands
-import discord
-from discord.ext import commands
 from discord import app_commands
 import os
 from dotenv import load_dotenv
 import random
 import string
 
+# --- SETUP ---
 load_dotenv()
 TOKEN = os.environ.get("TOKEN")
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
 BRAND = "Fast Brawl Services"
+
+# --- MODAL & VIEWS ---
+class RankedBoostModal(discord.ui.Modal, title="Ranked Boost Order"):
+    def __init__(self):
+        super().__init__()
+    
+    current_rank = discord.ui.TextInput(label="Current Rank", placeholder="e.g. Bronze I", max_length=50)
+    desired_rank = discord.ui.TextInput(label="Desired Rank", placeholder="e.g. Mythic I", max_length=50)
+    power_11 = discord.ui.TextInput(label="Power 11 Brawlers", placeholder="e.g. 10", max_length=10)
+    payment = discord.ui.TextInput(label="Payment Method", placeholder="e.g. PayPal", max_length=50)
+    notes = discord.ui.TextInput(label="Additional Notes", style=discord.TextStyle.paragraph, required=False, max_length=500)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Current Rank": self.current_rank.value,
+            "Desired Rank": self.desired_rank.value,
+            "Power 11 Brawlers": self.power_11.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value or "None"
+        }
+        await interaction.response.defer(ephemeral=True)
+        thread = await create_ticket(interaction.guild, "ranked", interaction.user, data)
+        if thread:
+            await interaction.followup.send(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Error creating ticket.", ephemeral=True)
+
+class RankedBoostCarryView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
+    async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(RankedBoostModal())
+
+    @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
+    async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(RankedBoostModal())
+
+# --- ALL YOUR OTHER CODE (PASTE EVERYTHING FROM PAYMENT_DETAILS ONWARDS BELOW THIS LINE) ---
 
 PAYMENT_DETAILS = {
     "PayPal": "📧 **PayPal:** dahn3854@gmail.com",
