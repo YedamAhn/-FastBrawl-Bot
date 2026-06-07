@@ -120,11 +120,10 @@ async def create_ticket(guild, service, user, data):
         return None
 
     ticket_num = generate_ticket_number()
-    # Changed to private_thread to stop system messages in the channel
+    # Removed auto_archive_duration to prevent Server Boost level crashes
     thread = await active_channel.create_thread(
         name=f"{user.name}.{ticket_num}",
-        type=discord.ChannelType.private_thread,
-        auto_archive_duration=10080
+        type=discord.ChannelType.private_thread
     )
 
     ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
@@ -158,7 +157,6 @@ async def create_ticket(guild, service, user, data):
 
     owner_role = discord.utils.get(guild.roles, name="Owner")
     if owner_role:
-        # Removed delete_after so it stays in your active list!
         await thread.send(f"{owner_role.mention} New ticket opened!")
 
     return thread
@@ -189,7 +187,7 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket With Reason"):
             await interaction.channel.edit(archived=True, locked=True)
 
 # ─────────────────────────────────────────────
-# CONFIRM VIEW
+# CONFIRM VIEW (FIXED WITH DEFER & ERROR CATCHING)
 # ─────────────────────────────────────────────
 class ConfirmOrderView(discord.ui.View):
     def __init__(self, service, data):
@@ -199,11 +197,18 @@ class ConfirmOrderView(discord.ui.View):
 
     @discord.ui.button(label="✅ Confirm & Create Ticket", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        thread = await create_ticket(interaction.guild, self.service, interaction.user, self.data)
-        if thread:
-            await interaction.response.edit_message(content=f"✅ Ticket created: {thread.mention}\nA staff member will confirm your price shortly.", embed=None, view=None)
-        else:
-            await interaction.response.edit_message(content="❌ Could not find active channel. Contact an admin.", embed=None, view=None)
+        # Acknowledge immediately to prevent the 3-second timeout crash!
+        await interaction.response.defer()
+        try:
+            thread = await create_ticket(interaction.guild, self.service, interaction.user, self.data)
+            if thread:
+                await interaction.edit_original_response(content=f"✅ Ticket created: {thread.mention}\nA staff member will confirm your price shortly.", embed=None, view=None)
+            else:
+                await interaction.edit_original_response(content="❌ Could not find active channel. Please make sure the active channel exists.", embed=None, view=None)
+        except discord.errors.Forbidden:
+            await interaction.edit_original_response(content="❌ **Permission Error:** I don't have the **'Create Private Threads'** or **'Send Messages in Threads'** permission! Please check my role permissions in the server settings.", embed=None, view=None)
+        except Exception as e:
+            await interaction.edit_original_response(content=f"❌ **Error:** {e}", embed=None, view=None)
 
     @discord.ui.button(label="🔄 Change Selections", style=discord.ButtonStyle.secondary)
     async def change(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -737,11 +742,9 @@ class ServiceSelectView(discord.ui.View):
             guild = interaction.guild
             others_channel = discord.utils.get(guild.channels, name="🟢｜active-support")
             if others_channel:
-                # Changed to private_thread for support tickets as well
                 thread = await others_channel.create_thread(
                     name=f"Support — {interaction.user.name}",
-                    type=discord.ChannelType.private_thread,
-                    auto_archive_duration=10080
+                    type=discord.ChannelType.private_thread
                 )
                 embed = discord.Embed(title="🎫 Support Ticket Opened", description=f"Welcome {interaction.user.mention}! A staff member will be with you shortly.", color=discord.Color.blue())
                 embed.set_footer(text=f"Powered by {BRAND}")
@@ -750,7 +753,6 @@ class ServiceSelectView(discord.ui.View):
 
                 owner_role = discord.utils.get(guild.roles, name="Owner")
                 if owner_role:
-                    # Removed delete_after so it stays in your active list!
                     await thread.send(f"{owner_role.mention} New support ticket!")
 
                 await interaction.response.send_message(f"✅ Support ticket created: {thread.mention}", ephemeral=True)
@@ -824,20 +826,15 @@ class ReviewPostView(discord.ui.View):
 # SLASH COMMANDS
 # ─────────────────────────────────────────────
 
-# Helper function to prevent timeouts and catch permission errors
 async def safe_send_panel(interaction, embed, view, success_msg):
-    # 1. Immediately tell Discord we are working on it to prevent the timeout
     await interaction.response.defer(ephemeral=True)
     try:
-        # 2. Try to send the panel
         if embed:
             await interaction.channel.send(embed=embed, view=view)
         else:
             await interaction.channel.send(view=view)
-        # 3. Confirm success
         await interaction.followup.send(success_msg)
     except discord.errors.Forbidden:
-        # 4. Catch the silent permission crash and tell the user
         await interaction.followup.send("❌ **Error:** I don't have permission to send messages or embed links in this channel! Check my roles.")
     except Exception as e:
         await interaction.followup.send(f"❌ **Error:** {e}")
@@ -906,56 +903,3 @@ async def setup_tier1(interaction: discord.Interaction):
 
 @bot.tree.command(name="setup-tier2", description="Post the Tier 2 order panel")
 @app_commands.checks.has_permissions(administrator=True)
-async def setup_tier2(interaction: discord.Interaction):
-    await safe_send_panel(interaction, None, TierOrderView("2", "tier-2"), "✅ Tier 2 panel posted!")
-
-@bot.tree.command(name="setup-tier3", description="Post the Tier 3 order panel")
-@app_commands.checks.has_permissions(administrator=True)
-async def setup_tier3(interaction: discord.Interaction):
-    await safe_send_panel(interaction, None, TierOrderView("3", "tier-3"), "✅ Tier 3 panel posted!")
-
-@bot.tree.command(name="review", description="Send a review request to a user")
-@app_commands.checks.has_permissions(administrator=True)
-@app_commands.describe(user="The user to send a review request to")
-async def review(interaction: discord.Interaction, user: discord.Member):
-    await interaction.response.defer(ephemeral=True)
-    try:
-        embed = discord.Embed(title="⭐ Leave a Review", description="How was your experience with Fast Brawl Services?\nSelect a star rating below!", color=discord.Color.gold())
-        embed.set_footer(text=f"Powered by {BRAND}")
-        await user.send(embed=embed, view=ReviewRatingView())
-        await interaction.followup.send(f"✅ Review request sent to {user.mention}!")
-    except:
-        await interaction.followup.send(f"❌ Could not DM {user.mention}. They may have DMs disabled.")
-
-# ─────────────────────────────────────────────
-# BOT EVENTS
-# ─────────────────────────────────────────────
-@bot.event
-async def on_ready():
-    print(f"✅ {bot.user} is online!")
-    bot.add_view(ServiceSelectView())
-    bot.add_view(RankedOrderView())
-    bot.add_view(RankedBoostCarryView())
-    bot.add_view(TrophiesOrderView())
-    bot.add_view(TrophiesBoostCarryView())
-    bot.add_view(PrestigeOrderView())
-    bot.add_view(PrestigeBoostCarryView())
-    bot.add_view(WinstreakOrderView())
-    bot.add_view(WinstreakBoostCarryView())
-    bot.add_view(MatcherinoOrderView())
-    bot.add_view(MatcherinoBoostCarryView())
-    bot.add_view(ChampionshipOrderView())
-    bot.add_view(ChampionshipBoostCarryView())
-    bot.add_view(CloseTicketView())
-
-    try:
-        synced = await bot.tree.sync()
-        print(f"✅ Synced {len(synced)} slash commands")
-    except Exception as e:
-        print(f"❌ Failed to sync: {e}")
-
-if not TOKEN:
-    print("❌ TOKEN not found.")
-    exit()
-
-bot.run(TOKEN)
