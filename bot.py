@@ -120,9 +120,10 @@ async def create_ticket(guild, service, user, data):
         return None
 
     ticket_num = generate_ticket_number()
+    # Changed to private_thread to stop system messages in the channel
     thread = await active_channel.create_thread(
         name=f"{user.name}.{ticket_num}",
-        type=discord.ChannelType.public_thread,
+        type=discord.ChannelType.private_thread,
         auto_archive_duration=10080
     )
 
@@ -157,7 +158,8 @@ async def create_ticket(guild, service, user, data):
 
     owner_role = discord.utils.get(guild.roles, name="Owner")
     if owner_role:
-        await thread.send(f"{owner_role.mention} New ticket opened!", delete_after=5)
+        # Removed delete_after so it stays in your active list!
+        await thread.send(f"{owner_role.mention} New ticket opened!")
 
     return thread
 
@@ -735,7 +737,12 @@ class ServiceSelectView(discord.ui.View):
             guild = interaction.guild
             others_channel = discord.utils.get(guild.channels, name="🟢｜active-support")
             if others_channel:
-                thread = await others_channel.create_thread(name=f"Support — {interaction.user.name}", type=discord.ChannelType.public_thread, auto_archive_duration=10080)
+                # Changed to private_thread for support tickets as well
+                thread = await others_channel.create_thread(
+                    name=f"Support — {interaction.user.name}",
+                    type=discord.ChannelType.private_thread,
+                    auto_archive_duration=10080
+                )
                 embed = discord.Embed(title="🎫 Support Ticket Opened", description=f"Welcome {interaction.user.mention}! A staff member will be with you shortly.", color=discord.Color.blue())
                 embed.set_footer(text=f"Powered by {BRAND}")
                 await thread.send(embed=embed, view=CloseTicketView())
@@ -743,7 +750,8 @@ class ServiceSelectView(discord.ui.View):
 
                 owner_role = discord.utils.get(guild.roles, name="Owner")
                 if owner_role:
-                    await thread.send(f"{owner_role.mention} New support ticket!", delete_after=5)
+                    # Removed delete_after so it stays in your active list!
+                    await thread.send(f"{owner_role.mention} New support ticket!")
 
                 await interaction.response.send_message(f"✅ Support ticket created: {thread.mention}", ephemeral=True)
             else:
