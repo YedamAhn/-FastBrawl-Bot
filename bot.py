@@ -29,12 +29,32 @@ PAYMENT_DETAILS = {
     "PaySafe Card": "👤 A staff member will provide PaySafe details shortly.",
 }
 # --- ADD THIS CLASS RIGHT BELOW YOUR IMPORTS ---
-class RankedBoostModal(discord.ui.Modal, title="Ranked Boost Order"):
-    current_rank = discord.ui.TextInput(label="Select your current rank", placeholder="e.g. Bronze I", min_length=2, max_length=50)
-    desired_rank = discord.ui.TextInput(label="Select your desired rank", placeholder="e.g. Mythic I", min_length=2, max_length=50)
+class RankedBoostModal(discord.ui.Modal, title="Finalize your order"):
+    def __init__(self, current, desired):
+        super().__init__()
+        self.current_val = current
+        self.desired_val = desired
+
+    # Keep only the fields you still need the user to type in
     power_11 = discord.ui.TextInput(label="How many Power 11 brawlers?", placeholder="e.g. 10", min_length=1, max_length=10)
     payment = discord.ui.TextInput(label="Payment Method", placeholder="e.g. PayPal", min_length=2, max_length=50)
     notes = discord.ui.TextInput(label="Additional Notes", style=discord.TextStyle.paragraph, required=False, max_length=500)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Now include the values passed from the dropdowns AND the user input
+        data = {
+            "Current Rank": self.current_val,
+            "Desired Rank": self.desired_val,
+            "Power 11": self.power_11.value,
+            "Payment": self.payment.value,
+            "Notes": self.notes.value or "None"
+        }
+        await interaction.response.defer(ephemeral=True)
+        thread = await create_ticket(interaction.guild, "ranked", interaction.user, data)
+        if thread:
+            await interaction.followup.send(f"✅ Ticket created: {thread.mention}", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Error creating ticket.", ephemeral=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         data = {
