@@ -53,38 +53,6 @@ SERVICE_TITLES = {
     "tier-3": ("🥉 Tier 3 Account Order", "Your Tier 3 Account Order"),
 }
 
-RANKS_CURRENT = [
-    "Bronze I", "Bronze II", "Bronze III",
-    "Silver I", "Silver II", "Silver III",
-    "Gold I", "Gold II", "Gold III",
-    "Diamond I", "Diamond II", "Diamond III",
-    "Mythic I", "Mythic II", "Mythic III",
-    "Legendary I", "Legendary II", "Legendary III",
-    "Masters I", "Masters II", "Masters III"
-]
-RANKS_DESIRED = [
-    "Diamond I", "Diamond II", "Diamond III",
-    "Mythic I", "Mythic II", "Mythic III",
-    "Legendary I", "Legendary II", "Legendary III",
-    "Masters I", "Masters II", "Masters III", "Pro"
-]
-TROPHY_RANGES = [
-    "0-10k", "10-20k", "20-30k", "30-40k", "40-50k", "50-60k",
-    "60-70k", "70-80k", "80-90k", "90-100k", "100-125k", "125-150k"
-]
-POWER11 = [
-    "0-10", "11-20", "21-30", "31-40", "41-50",
-    "51-60", "61-70", "71-80", "81-90", "91-100", "100+"
-]
-PRESTIGE_CURRENT = ["0 Trophies", "Prestige 1", "Prestige 2", "Prestige 3"]
-PRESTIGE_DESIRED = ["Prestige 1", "Prestige 2", "Prestige 3"]
-WINSTREAK_OPTIONS = ["50 wins", "67 wins", "69 wins", "101 wins", "111 wins", "125 wins", "200 wins"]
-BRAWLER_PICKER = ["Booster chooses (Normal Price)", "I choose the brawler (+€5)"]
-MATCHERINO_BRAWLERS = ["60-70 Brawlers", "70-80 Brawlers", "80-90 Brawlers", "90+ Brawlers"]
-PAYMENT_OPTIONS = ["PayPal", "Revolut", "Apple Pay", "Bank Transfer", "PayPal Gift Card", "Debit/Credit Card", "Crypto", "PaySafe Card", "Other"]
-BUFFIES = ["1-5", "6-10", "11-15", "16-20", "21-25", "26-30", "30+"]
-MASTERS_HIGH = ["Masters II", "Masters III", "Pro"]
-
 IMAGES = {
     "ranked": "https://media.discordapp.net/attachments/1512925620169084968/1512959670476865676/image.png?ex=6a25fcfe&is=6a24ab7e&hm=cd95ede6d8e53bd66286ae88b27c7ff850a291308fcb653ed13e189472210812&=&format=webp&quality=lossless&width=2280&height=1272",
     "prestige": "https://media.discordapp.net/attachments/1512925620169084968/1512965912385421352/image.png?ex=6a2602cf&is=6a24b14f&hm=f45e7d5a1059d5ed59791c4417d4d1441614cd7b235f547a239393291175bc0d&=&format=webp&quality=lossless&width=2448&height=1272",
@@ -103,9 +71,6 @@ def get_payment_info(method):
 def stars(rating):
     return "⭐" * rating + "☆" * (5 - rating)
 
-def make_options(lst):
-    return [discord.SelectOption(label=x, value=x) for x in lst]
-
 # ─────────────────────────────────────────────
 # CREATE TICKET
 # ─────────────────────────────────────────────
@@ -121,7 +86,9 @@ async def create_ticket(guild, service, user, data):
         type=discord.ChannelType.public_thread,
         auto_archive_duration=10080
     )
-    # Delete the "started a thread" message in parent channel
+
+    # Delete the "started a thread" message
+    await discord.utils.sleep_until(discord.utils.utcnow())
     async for message in active_channel.history(limit=5):
         if message.type == discord.MessageType.thread_created:
             await message.delete()
@@ -129,7 +96,6 @@ async def create_ticket(guild, service, user, data):
 
     ticket_label, order_title = SERVICE_TITLES.get(service, ("📋 Order Ticket", "Your Order"))
 
-    # Embed 1 — header
     header_embed = discord.Embed(
         title=f"{ticket_label} is now open! 🎮",
         description="**Click the button below to close this ticket when you're done.**",
@@ -137,14 +103,13 @@ async def create_ticket(guild, service, user, data):
     )
     header_embed.set_footer(text=f"Powered by {BRAND}")
 
-    # Embed 2 — order details
     details_embed = discord.Embed(
-        title=f"ℹ️ Order Details",
+        title="ℹ️ Order Details",
         description=f"**{order_title}**",
         color=discord.Color.purple()
     )
     for key, value in data.items():
-        if key == "Notes" and value == "None":
+        if key == "Notes" and (value == "None" or not value):
             continue
         details_embed.add_field(name=key, value=f"╰ {value}", inline=False)
     details_embed.add_field(name="Customer", value=f"╰ {user.mention}", inline=False)
@@ -155,7 +120,6 @@ async def create_ticket(guild, service, user, data):
     await thread.send(embeds=[header_embed, details_embed], view=CloseTicketView())
     await thread.add_user(user)
 
-    # Ping owner
     owner_role = discord.utils.get(guild.roles, name="Owner")
     if owner_role:
         await thread.send(f"{owner_role.mention} New ticket opened!", delete_after=5)
@@ -219,158 +183,57 @@ def build_confirm_embed(service_name, data):
         color=discord.Color.purple()
     )
     for key, value in data.items():
-        if key == "Notes" and value == "None":
+        if key == "Notes" and (value == "None" or not value):
             continue
         embed.add_field(name=key, value=f"> {value}", inline=False)
     embed.set_footer(text=f"Powered by {BRAND} | Account info is hidden for security")
     return embed
 
 # ─────────────────────────────────────────────
-# ADDITIONAL NOTES MODAL
+# BOOST/CARRY VIEW
 # ─────────────────────────────────────────────
-class AdditionalNotesModal(discord.ui.Modal, title="Additional Notes (Optional)"):
-    notes = discord.ui.TextInput(label="Notes", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+def make_boost_carry_view(boost_custom_id, carry_custom_id, boost_callback, carry_callback):
+    class BoostCarryView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+    btn_boost = discord.ui.Button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id=boost_custom_id)
+    btn_boost.callback = boost_callback
+    btn_carry = discord.ui.Button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id=carry_custom_id)
+    btn_carry.callback = carry_callback
+    view = BoostCarryView()
+    view.add_item(btn_boost)
+    view.add_item(btn_carry)
+    return view
 
-    def __init__(self, service, service_name, data):
-        super().__init__()
-        self.service = service
-        self.service_name = service_name
-        self.data = data
+# ─────────────────────────────────────────────
+# RANKED
+# ─────────────────────────────────────────────
+class RankedFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title=f"Ranked {'Boost' if order_type == 'Boost' else 'Carry'} Order")
+        self.order_type = order_type
+        self.current_rank = discord.ui.TextInput(label="Current Rank", placeholder="e.g. Bronze I, Silver II, Gold III, Diamond I...", max_length=20)
+        self.desired_rank = discord.ui.TextInput(label="Desired Rank (min Diamond I)", placeholder="e.g. Diamond I, Mythic II, Masters I, Pro...", max_length=20)
+        self.power11 = discord.ui.TextInput(label="How many Power 11 brawlers do you have?", placeholder="e.g. 0-10, 11-20, 51-60, 100+", max_length=10)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+        self.add_item(self.current_rank)
+        self.add_item(self.desired_rank)
+        self.add_item(self.power11)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.data["Notes"] = self.notes.value if self.notes.value else "None"
-        embed = build_confirm_embed(self.service_name, self.data)
-        await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, self.data), ephemeral=True)
-
-# ─────────────────────────────────────────────
-# OTHER PAYMENT MODAL
-# ─────────────────────────────────────────────
-class OtherPaymentView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    @discord.ui.button(label="Enter Payment Method", style=discord.ButtonStyle.primary, custom_id="enter_other_payment", emoji="💳")
-    async def enter_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(OtherPaymentModal(self.service, self.service_name, self.data))
-
-class OtherPaymentModal(discord.ui.Modal, title="Other Payment Method"):
-    payment = discord.ui.TextInput(label="Payment Method", placeholder="Enter your payment method...", max_length=50)
-
-    def __init__(self, service, service_name, data):
-        super().__init__()
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    async def on_submit(self, interaction: discord.Interaction):
-        self.data["Payment Method"] = self.payment.value
-        self.data["Notes"] = "None"
-        embed = build_confirm_embed(self.service_name, self.data)
-        await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, self.data), ephemeral=True)
-
-# ─────────────────────────────────────────────
-# PAYMENT VIEW (reusable)
-# ─────────────────────────────────────────────
-class PaymentView(discord.ui.View):
-    def __init__(self, service, service_name, data, custom_id_suffix):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-        select = discord.ui.Select(
-            placeholder="Select payment method...",
-            custom_id=f"payment_{custom_id_suffix}",
-            options=make_options(PAYMENT_OPTIONS)
-        )
-        select.callback = self.on_select
-        self.add_item(select)
-
-    def get_prompt(self):
-        return "**Select your payment method:**"
-
-    async def on_select(self, interaction: discord.Interaction):
-        value = interaction.data["values"][0]
-        if value == "Other":
-            view = OtherPaymentView(self.service, self.service_name, self.data)
-            await interaction.response.edit_message(content="💳 **Please click the button below to enter your payment method:**", view=view)
-        else:
-            self.data["Payment Method"] = value
-            await interaction.response.send_modal(AdditionalNotesModal(self.service, self.service_name, self.data))
-
-# ─────────────────────────────────────────────
-# RANKED FLOW
-# ─────────────────────────────────────────────
-class RankedCurrentRankView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Select your current rank:**"
-
-    @discord.ui.select(placeholder="Select current rank...", custom_id="ranked_current", options=make_options(RANKS_CURRENT))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Current Rank"] = select.values[0]
-        view = RankedDesiredRankView(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class RankedDesiredRankView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Select your desired rank:**"
-
-    @discord.ui.select(placeholder="Select desired rank...", custom_id="ranked_desired", options=make_options(RANKS_DESIRED))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Desired Rank"] = select.values[0]
-        if select.values[0] in MASTERS_HIGH:
-            view = RankedBuffiesView(self.service, self.service_name, self.data)
-            await interaction.response.edit_message(content=view.get_prompt(), view=view)
-        else:
-            view = RankedPower11View(self.service, self.service_name, self.data)
-            await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class RankedBuffiesView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**How many buffies do you have unlocked?**"
-
-    @discord.ui.select(placeholder="Select buffies...", custom_id="ranked_buffies", options=make_options(BUFFIES))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Buffies Unlocked"] = select.values[0]
-        view = RankedPower11View(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class RankedPower11View(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**How many Power 11 brawlers do you have?**"
-
-    @discord.ui.select(placeholder="Select Power 11 count...", custom_id="ranked_power11", options=make_options(POWER11))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Power 11 Brawlers"] = select.values[0]
-        view = PaymentView(self.service, self.service_name, self.data, "ranked")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+        data = {
+            "Order Type": self.order_type,
+            "Current Rank": self.current_rank.value,
+            "Desired Rank": self.desired_rank.value,
+            "Power 11 Brawlers": self.power11.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Ranked Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("ranked", data), ephemeral=True)
 
 class RankedOrderView(discord.ui.View):
     def __init__(self):
@@ -387,66 +250,41 @@ class RankedBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="ranked_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = RankedCurrentRankView("ranked", "Ranked Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(RankedFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = RankedCurrentRankView("ranked", "Ranked Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(RankedFormModal("Carry"))
 
 # ─────────────────────────────────────────────
-# TROPHIES FLOW
+# TROPHIES
 # ─────────────────────────────────────────────
-class TrophiesCurrentView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
+class TrophiesFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title="Trophy Boost Order")
+        self.order_type = order_type
+        self.current_range = discord.ui.TextInput(label="Current Trophy Range", placeholder="e.g. 0-10k, 20-30k, 50-60k, 100-125k...", max_length=20)
+        self.desired_range = discord.ui.TextInput(label="Desired Trophy Range", placeholder="e.g. 10-20k, 50-60k, 125-150k...", max_length=20)
+        self.power11 = discord.ui.TextInput(label="How many Power 11 brawlers do you have?", placeholder="e.g. 0-10, 11-20, 51-60, 100+", max_length=10)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+        self.add_item(self.current_range)
+        self.add_item(self.desired_range)
+        self.add_item(self.power11)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
 
-    def get_prompt(self):
-        return "**Select your current trophy range:**"
-
-    @discord.ui.select(placeholder="Select current trophy range...", custom_id="trophies_current", options=make_options(TROPHY_RANGES))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Current Trophy Range"] = select.values[0]
-        view = TrophiesDesiredView(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class TrophiesDesiredView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Select your desired trophy range:**"
-
-    @discord.ui.select(placeholder="Select desired trophy range...", custom_id="trophies_desired", options=make_options(TROPHY_RANGES))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Desired Trophy Range"] = select.values[0]
-        view = TrophiesPower11View(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class TrophiesPower11View(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**How many Power 11 brawlers do you have?**"
-
-    @discord.ui.select(placeholder="Select Power 11 count...", custom_id="trophies_power11", options=make_options(POWER11))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Power 11 Brawlers"] = select.values[0]
-        view = PaymentView(self.service, self.service_name, self.data, "trophies")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Order Type": self.order_type,
+            "Current Trophy Range": self.current_range.value,
+            "Desired Trophy Range": self.desired_range.value,
+            "Power 11 Brawlers": self.power11.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Trophy Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("bulk-trophies", data), ephemeral=True)
 
 class TrophiesOrderView(discord.ui.View):
     def __init__(self):
@@ -463,64 +301,41 @@ class TrophiesBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="trophies_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = TrophiesCurrentView("bulk-trophies", "Trophy Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(TrophiesFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="trophies_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = TrophiesCurrentView("bulk-trophies", "Trophy Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(TrophiesFormModal("Carry"))
 
 # ─────────────────────────────────────────────
-# PRESTIGE FLOW
+# PRESTIGE
 # ─────────────────────────────────────────────
-class PrestigeBrawlerModal(discord.ui.Modal, title="Enter Brawler Name"):
-    brawler = discord.ui.TextInput(label="Brawler Name", placeholder="Enter brawler name...", max_length=30)
-
-    def __init__(self, service, service_name, data):
-        super().__init__()
-        self.service = service
-        self.service_name = service_name
-        self.data = data
+class PrestigeFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title="Prestige Boost Order")
+        self.order_type = order_type
+        self.brawler = discord.ui.TextInput(label="Brawler Name", placeholder="Enter the brawler name...", max_length=30)
+        self.current_prestige = discord.ui.TextInput(label="Current Prestige", placeholder="0 Trophies / Prestige 1 / Prestige 2 / Prestige 3", max_length=20)
+        self.desired_prestige = discord.ui.TextInput(label="Desired Prestige", placeholder="Prestige 1 / Prestige 2 / Prestige 3", max_length=20)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=300, style=discord.TextStyle.paragraph)
+        self.add_item(self.brawler)
+        self.add_item(self.current_prestige)
+        self.add_item(self.desired_prestige)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
 
     async def on_submit(self, interaction: discord.Interaction):
-        self.data["Brawler"] = self.brawler.value
-        view = PrestigeCurrentView(self.service, self.service_name, self.data)
-        await interaction.response.send_message(content=view.get_prompt(), view=view, ephemeral=True)
-
-class PrestigeCurrentView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Select your current prestige:**"
-
-    @discord.ui.select(placeholder="Select current prestige...", custom_id="prestige_current", options=make_options(PRESTIGE_CURRENT))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Current Prestige"] = select.values[0]
-        view = PrestigeDesiredView(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class PrestigeDesiredView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Select your desired prestige:**"
-
-    @discord.ui.select(placeholder="Select desired prestige...", custom_id="prestige_desired", options=make_options(PRESTIGE_DESIRED))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Desired Prestige"] = select.values[0]
-        view = PaymentView(self.service, self.service_name, self.data, "prestige")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+        data = {
+            "Order Type": self.order_type,
+            "Brawler": self.brawler.value,
+            "Current Prestige": self.current_prestige.value,
+            "Desired Prestige": self.desired_prestige.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Prestige Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("prestige", data), ephemeral=True)
 
 class PrestigeOrderView(discord.ui.View):
     def __init__(self):
@@ -537,64 +352,41 @@ class PrestigeBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="prestige_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        await interaction.response.send_modal(PrestigeBrawlerModal("prestige", "Prestige Boost", data))
+        await interaction.response.send_modal(PrestigeFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="prestige_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        await interaction.response.send_modal(PrestigeBrawlerModal("prestige", "Prestige Boost", data))
+        await interaction.response.send_modal(PrestigeFormModal("Carry"))
 
 # ─────────────────────────────────────────────
-# WINSTREAK FLOW
+# WINSTREAK
 # ─────────────────────────────────────────────
-class WinstreakTargetView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
+class WinstreakFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title="Winstreak Boost Order")
+        self.order_type = order_type
+        self.target = discord.ui.TextInput(label="Target Winstreak", placeholder="50 wins / 67 wins / 69 wins / 101 wins / 111 wins / 125 wins / 200 wins", max_length=20)
+        self.picker = discord.ui.TextInput(label="Who chooses the brawler?", placeholder="Booster chooses (Normal Price) / I choose the brawler (+€5)", max_length=40)
+        self.power11 = discord.ui.TextInput(label="How many Power 11 brawlers do you have?", placeholder="e.g. 0-10, 11-20, 51-60, 100+", max_length=10)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=300, style=discord.TextStyle.paragraph)
+        self.add_item(self.target)
+        self.add_item(self.picker)
+        self.add_item(self.power11)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
 
-    def get_prompt(self):
-        return "**Select your target winstreak:**"
-
-    @discord.ui.select(placeholder="Select target winstreak...", custom_id="winstreak_target", options=make_options(WINSTREAK_OPTIONS))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Target Winstreak"] = select.values[0]
-        view = WinstreakPickerView(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class WinstreakPickerView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**Who chooses the brawler?**"
-
-    @discord.ui.select(placeholder="Select who picks the brawler...", custom_id="winstreak_picker", options=make_options(BRAWLER_PICKER))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Brawler Picker"] = select.values[0]
-        view = WinstreakPower11View(self.service, self.service_name, self.data)
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
-
-class WinstreakPower11View(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
-
-    def get_prompt(self):
-        return "**How many Power 11 brawlers do you have?**"
-
-    @discord.ui.select(placeholder="Select Power 11 count...", custom_id="winstreak_power11", options=make_options(POWER11))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Power 11 Brawlers"] = select.values[0]
-        view = PaymentView(self.service, self.service_name, self.data, "winstreak")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Order Type": self.order_type,
+            "Target Winstreak": self.target.value,
+            "Brawler Picker": self.picker.value,
+            "Power 11 Brawlers": self.power11.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Winstreak Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("winstreaks", data), ephemeral=True)
 
 class WinstreakOrderView(discord.ui.View):
     def __init__(self):
@@ -611,34 +403,35 @@ class WinstreakBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="winstreak_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = WinstreakTargetView("winstreaks", "Winstreak Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(WinstreakFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="winstreak_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = WinstreakTargetView("winstreaks", "Winstreak Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(WinstreakFormModal("Carry"))
 
 # ─────────────────────────────────────────────
-# MATCHERINO / CHAMPIONSHIP FLOW
+# MATCHERINO
 # ─────────────────────────────────────────────
-class MatchBrawlerView(discord.ui.View):
-    def __init__(self, service, service_name, data):
-        super().__init__(timeout=None)
-        self.service = service
-        self.service_name = service_name
-        self.data = data
+class MatcherinoFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title="Matcherino Boost Order")
+        self.order_type = order_type
+        self.brawlers = discord.ui.TextInput(label="How many brawlers do you have?", placeholder="60-70 Brawlers / 70-80 Brawlers / 80-90 Brawlers / 90+ Brawlers", max_length=20)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+        self.add_item(self.brawlers)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
 
-    def get_prompt(self):
-        return "**How many brawlers do you have?**"
-
-    @discord.ui.select(placeholder="Select brawler count...", custom_id="match_brawlers", options=make_options(MATCHERINO_BRAWLERS))
-    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.data["Brawler Count"] = select.values[0]
-        view = PaymentView(self.service, self.service_name, self.data, "match")
-        await interaction.response.edit_message(content=view.get_prompt(), view=view)
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Order Type": self.order_type,
+            "Brawler Count": self.brawlers.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Matcherino Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("matcherino", data), ephemeral=True)
 
 class MatcherinoOrderView(discord.ui.View):
     def __init__(self):
@@ -655,15 +448,35 @@ class MatcherinoBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="matcherino_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = MatchBrawlerView("matcherino", "Matcherino Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(MatcherinoFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="matcherino_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = MatchBrawlerView("matcherino", "Matcherino Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(MatcherinoFormModal("Carry"))
+
+# ─────────────────────────────────────────────
+# CHAMPIONSHIP
+# ─────────────────────────────────────────────
+class ChampionshipFormModal(discord.ui.Modal):
+    def __init__(self, order_type):
+        super().__init__(title="Championship Boost Order")
+        self.order_type = order_type
+        self.brawlers = discord.ui.TextInput(label="How many brawlers do you have?", placeholder="60-70 Brawlers / 70-80 Brawlers / 80-90 Brawlers / 90+ Brawlers", max_length=20)
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+        self.add_item(self.brawlers)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Order Type": self.order_type,
+            "Brawler Count": self.brawlers.value,
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed("Championship Boost", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView("championship", data), ephemeral=True)
 
 class ChampionshipOrderView(discord.ui.View):
     def __init__(self):
@@ -680,19 +493,34 @@ class ChampionshipBoostCarryView(discord.ui.View):
 
     @discord.ui.button(label="Get B00sted", style=discord.ButtonStyle.success, emoji="🚀", custom_id="championship_boost")
     async def boost(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Boost"}
-        view = MatchBrawlerView("championship", "Championship Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(ChampionshipFormModal("Boost"))
 
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="🤝", custom_id="championship_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = {"Order Type": "Carry"}
-        view = MatchBrawlerView("championship", "Championship Boost", data)
-        await interaction.response.edit_message(content=view.get_prompt(), embed=None, view=view)
+        await interaction.response.send_modal(ChampionshipFormModal("Carry"))
 
 # ─────────────────────────────────────────────
-# TIER FLOW
+# TIER
 # ─────────────────────────────────────────────
+class TierFormModal(discord.ui.Modal):
+    def __init__(self, tier, service):
+        super().__init__(title=f"Tier {tier} Account Order")
+        self.tier = tier
+        self.service = service
+        self.payment = discord.ui.TextInput(label="Payment Method", placeholder="PayPal / Revolut / Apple Pay / Bank Transfer / etc.", max_length=50)
+        self.notes = discord.ui.TextInput(label="Additional Notes (Optional)", placeholder="Any special requests...", required=False, max_length=500, style=discord.TextStyle.paragraph)
+        self.add_item(self.payment)
+        self.add_item(self.notes)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = {
+            "Account Tier": f"Tier {self.tier}",
+            "Payment Method": self.payment.value,
+            "Notes": self.notes.value if self.notes.value else "None",
+        }
+        embed = build_confirm_embed(f"Tier {self.tier} Account", data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, data), ephemeral=True)
+
 class TierOrderView(discord.ui.View):
     def __init__(self, tier, service):
         super().__init__(timeout=None)
@@ -703,12 +531,10 @@ class TierOrderView(discord.ui.View):
         self.add_item(btn)
 
     async def order_now(self, interaction: discord.Interaction):
-        data = {"Account Tier": f"Tier {self.tier}"}
-        view = PaymentView(self.service, f"Tier {self.tier} Account", data, f"tier{self.tier}")
-        await interaction.response.send_message(content=view.get_prompt(), view=view, ephemeral=True)
+        await interaction.response.send_modal(TierFormModal(self.tier, self.service))
 
 # ─────────────────────────────────────────────
-# ORDER-HERE DROPDOWN
+# ORDER-HERE
 # ─────────────────────────────────────────────
 class ServiceSelectView(discord.ui.View):
     def __init__(self):
