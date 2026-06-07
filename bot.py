@@ -410,7 +410,17 @@ class RankedPower11View(discord.ui.View):
         self.data["Power 11 Brawlers"] = select.values[0]
         view = PaymentView(self.service, self.service_name, self.data, "ranked")
         await interaction.response.send_message(view=RankSelectView("Boost"), ephemeral=True)
+class RankedBoostModal(discord.ui.Modal, title="Ranked Boost Order"):
+    def __init__(self):
+        super().__init__()
+    
+    current_rank = discord.ui.TextInput(label="Current Rank", placeholder="e.g. Bronze I")
+    desired_rank = discord.ui.TextInput(label="Desired Rank", placeholder="e.g. Mythic I")
+    power_11 = discord.ui.TextInput(label="Power 11 Brawlers", placeholder="e.g. 10")
+    payment = discord.ui.TextInput(label="Payment Method", placeholder="e.g. PayPal")
 
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message("✅ Order received!", ephemeral=True)
 class RankedOrderView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -422,9 +432,7 @@ class RankedOrderView(discord.ui.View):
 
 class RankedBoostCarryView(discord.ui.View): # 0 spaces
     def __init__(self):                      # 4 spaces
-        super().__init__(timeout=None)       # 8 spaces
-
-    @discord.ui.button(...)                  # 4 spaces (Aligned with def)
+    
     async def boost(self, ...):              # 4 spaces
         await interaction.response.send_modal(RankedBoostModal()) # 8 spaces
 
