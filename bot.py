@@ -245,6 +245,17 @@ class AdditionalNotesModal(discord.ui.Modal, title="Additional Notes (Optional)"
 # ─────────────────────────────────────────────
 # OTHER PAYMENT MODAL
 # ─────────────────────────────────────────────
+class OtherPaymentView(discord.ui.View):
+    def __init__(self, service, service_name, data):
+        super().__init__(timeout=None)
+        self.service = service
+        self.service_name = service_name
+        self.data = data
+
+    @discord.ui.button(label="Enter Payment Method", style=discord.ButtonStyle.primary, custom_id="enter_other_payment", emoji="💳")
+    async def enter_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(OtherPaymentModal(self.service, self.service_name, self.data))
+
 class OtherPaymentModal(discord.ui.Modal, title="Other Payment Method"):
     payment = discord.ui.TextInput(label="Payment Method", placeholder="Enter your payment method...", max_length=50)
 
@@ -256,7 +267,9 @@ class OtherPaymentModal(discord.ui.Modal, title="Other Payment Method"):
 
     async def on_submit(self, interaction: discord.Interaction):
         self.data["Payment Method"] = self.payment.value
-        await interaction.response.send_modal(AdditionalNotesModal(self.service, self.service_name, self.data))
+        self.data["Notes"] = "None"
+        embed = build_confirm_embed(self.service_name, self.data)
+        await interaction.response.send_message(embed=embed, view=ConfirmOrderView(self.service, self.data), ephemeral=True)
 
 # ─────────────────────────────────────────────
 # PAYMENT VIEW (reusable)
@@ -282,7 +295,8 @@ class PaymentView(discord.ui.View):
     async def on_select(self, interaction: discord.Interaction):
         value = interaction.data["values"][0]
         if value == "Other":
-            await interaction.response.send_modal(OtherPaymentModal(self.service, self.service_name, self.data))
+            view = OtherPaymentView(self.service, self.service_name, self.data)
+            await interaction.response.edit_message(content="💳 **Please click the button below to enter your payment method:**", view=view)
         else:
             self.data["Payment Method"] = value
             await interaction.response.send_modal(AdditionalNotesModal(self.service, self.service_name, self.data))
