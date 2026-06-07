@@ -418,7 +418,7 @@ class RankedBoostCarryView(discord.ui.View):
     @discord.ui.button(label="Get Carried (2x Price)", style=discord.ButtonStyle.primary, emoji="💎", custom_id="ranked_carry")
     async def carry(self, interaction: discord.Interaction, button: discord.ui.Button):
        await interaction.response.send_message(view=RankSelectView("Carry"), ephemeral=True)
-        class RankSelectView(discord.ui.View):
+class RankSelectView(discord.ui.View)
     def __init__(self, order_type):
         super().__init__(timeout=60)
         self.order_type = order_type
